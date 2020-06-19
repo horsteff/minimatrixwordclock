@@ -7,7 +7,7 @@
 
 #include "secrets.h"
 #include "numbers.h"
-#include "parts.h"
+#include "partials.h"
 #include "words.h"
 
 const char* ssid     = WIFI_SSID;
@@ -32,18 +32,18 @@ unsigned long lastTime = 0;
 void setup() {
   Serial.begin(115200);
 
-  drawWord(WORDS_NEU);
+  showWord(Words::run);
 
   while (!Serial) yield();
 
-  Serial.print(F("Connecting to "));
+  Serial.print(F("\n\nConnecting to "));
   Serial.println(ssid);
   WiFi.mode(WIFI_STA);
 //  WiFi.setAutoConnect(true);
 //  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
 
-  drawWord(WORDS_NET);
+  showWord(Words::net);
   Serial.println(F("Waitung for connection"));
   
   int ConnectTimeout = 30;
@@ -54,7 +54,7 @@ void setup() {
     Serial.print(WiFi.status());
     if (--ConnectTimeout <= 0)
     {
-      drawWord(WORDS_ACHACH);
+      showWord(Words::achach);
       Serial.println();
       Serial.println(F("WiFi connect timeout"));
       
@@ -69,14 +69,14 @@ void setup() {
     yield();
   }
 
-  drawWord(WORDS_DRIN);
+  showWord(Words::drin);
   Serial.println();
   Serial.println(F("WiFi connected"));
 
   // Print the IP address
   Serial.println(WiFi.localIP());
 
-  drawWord(WORDS_ZEIT);
+  showWord(Words::zeit);
   timeClient.setUpdateInterval(intervalNTP);
   timeClient.begin();
 
@@ -94,7 +94,7 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  if (currentMillis - prevNTP > intervalNTP) { // If a minute has passed since last NTP request
+  if (currentMillis - prevNTP > intervalNTP) { // If a NTP interval has passed since last NTP request
     prevNTP = currentMillis;
     Serial.print(F("Current UTC time:\t"));
     Serial.println(timeClient.getFormattedTime());
@@ -110,86 +110,53 @@ void loop() {
       Serial.println(F("More than 1 hour since last NTP response. Rebooting."));
       Serial.flush();
       ESP.reset();
+    } else if (intervalNTP > 600000) {
+      // on unsuccessful NTP try again after 10 min if NTP interval is above 10 min
+      prevNTP = currentMillis - intervalNTP + 600000;
     }
   }
 
   time_t localtime = CE.toLocal(timeClient.getEpochTime(), &tcr);
-  unsigned long now = timeClient.getHours() * 60 + timeClient.getMinutes();
+  int seconds = second(localtime);
+  int minutes = minute(localtime);
+  int hours = hour(localtime);
+
+  int now = hours * 60 + minutes;
   if (lastTime != now) {
     Serial.print(F("Current UTC time:\t"));
     Serial.println(timeClient.getFormattedTime());
 
     lastTime = now;
-    uint8_t buffer[8];
-    for (int i = 0; i < 8; i++) buffer[i] = 0;
+    uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
     
-//    int minutes = timeClient.getMinutes();
-    int minutes = minute(localtime);
-    int addHour = 0;
-    if (minutes >= 5 && minutes < 10) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_PAST], 8);
-      Serial.print(F("Fünf nach "));
-    } else if (minutes >= 10 && minutes < 15) {
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_PAST], 8);
-      Serial.print(F("Zehn nach "));
-    } else if (minutes >= 15 && minutes < 20) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_PAST], 8);
-      Serial.print(F("Fünfzehn nach "));
-    } else if (minutes >= 20 && minutes < 25) {
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_BEFORE], 8);
-      overlay(buffer, parts[PART_HALF], 8);
-      addHour = 1;
-      Serial.print(F("Zehn vor halb "));
-    } else if (minutes >= 25 && minutes < 30) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_BEFORE], 8);
-      overlay(buffer, parts[PART_HALF], 8);
-      addHour = 1;
-      Serial.print(F("Fünf vor halb "));
-    } else if (minutes >= 30 && minutes < 35) {
-      overlay(buffer, parts[PART_HALF], 8);
-      addHour = 1;
-      Serial.print(F("Halb "));
-    } else if (minutes >= 35 && minutes < 40) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_PAST], 8);
-      overlay(buffer, parts[PART_HALF], 8);
-      addHour = 1;
-      Serial.print(F("Fünf nach halb "));
-    } else if (minutes >= 40 && minutes < 45) {
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_PAST], 8);
-      overlay(buffer, parts[PART_HALF], 8);
-      addHour = 1;
-      Serial.print(F("Zehn nach halb "));
-    } else if (minutes >= 45 && minutes < 50) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_BEFORE], 8);
-      addHour = 1;
-      Serial.print(F("Fünfzehn vor "));
-    } else if (minutes >= 50 && minutes < 55) {
-      overlay(buffer, parts[PART_TEN], 8);
-      overlay(buffer, parts[PART_BEFORE], 8);
-      addHour = 1;
-      Serial.print(F("Zehn vor "));
-    } else if (minutes >= 55) {
-      overlay(buffer, parts[PART_FIVE], 8);
-      overlay(buffer, parts[PART_BEFORE], 8);
-      addHour = 1;
-      Serial.print(F("Fünf vor "));
+    if (minutes % 10 >= 5) {
+      overlay(buffer, Partials::five);
+      Serial.print(F("fünf"));
     }
-  
-//    int hours = timeClient.getHours() + addHour;
-    int hours = hour(localtime) + addHour;
+
+    if ((minutes >= 10 && minutes < 25) || (minutes >= 40 && minutes < 55)) {
+      overlay(buffer, Partials::ten);
+      Serial.print(F("zehn"));
+    }
+
+    if ((minutes >= 5 && minutes < 20) || (minutes >= 35 && minutes < 45)) {
+      overlay(buffer, Partials::past);
+      Serial.print(F(" nach "));
+    } else if ((minutes >= 20 && minutes < 30) || minutes >= 45) {
+      overlay(buffer, Partials::before);
+      Serial.print(F(" vor "));
+    }
+
+    if (minutes >= 20 && minutes < 45) {
+      overlay(buffer, Partials::half);
+      Serial.print(F("halb "));
+    }
+
+    if (minutes >= 20) hours++;
+
     if (hours > 12) hours = hours % 12;
     if (hours == 0) hours = 12;
-    overlay(buffer, numbers[hours - 1], 8);
+    overlay(buffer, *Numbers::digits[hours - 1]);
     Serial.println(hours);
 
     matrix.clear();
@@ -197,19 +164,20 @@ void loop() {
     matrix.writeDisplay();
   }
 
-  delay(1000);
+  // wait until the next possible display change (every 5 minutes)
+  delay(((300 - (((minutes * 60) + seconds) % 300)) * 1000) + 100);
 }
 
-void overlay(uint8_t *dest, const uint8_t *src, size_t num) {
-  for (int i = 0; i < num; i++) {
+void overlay(uint8_t *dest, const uint8_t *src) {
+  for (int i = 0; i < 8; i++) {
     uint8_t b = dest[i];
     b |=  pgm_read_byte(src + i);
     dest[i] = b;
   }
 }
 
-void drawWord(int index) {
+void showWord(const uint8_t word[]) {
   matrix.clear();
-  matrix.drawBitmap(0, 0, words[index], 8, 8, LED_ON);
+  matrix.drawBitmap(0, 0, word, 8, 8, LED_ON);
   matrix.writeDisplay();
 }
