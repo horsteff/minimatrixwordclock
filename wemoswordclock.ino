@@ -32,7 +32,7 @@ int lastDisplayTime = 0;
 void setup() {
   Serial.begin(115200);
 
-  showWord(Words::run);
+  showBitmap(Words::run);
 
   while (!Serial) yield();
 
@@ -43,7 +43,7 @@ void setup() {
 //  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
 
-  showWord(Words::net);
+  showBitmap(Words::net);
   Serial.println(F("Waitung for connection"));
   
   int ConnectTimeout = 30;
@@ -54,7 +54,7 @@ void setup() {
     Serial.print(WiFi.status());
     if (--ConnectTimeout <= 0)
     {
-      showWord(Words::achach);
+      showTwoWords(Words::ach2, Words::net);
       Serial.println();
       Serial.println(F("WiFi connect timeout"));
       
@@ -69,14 +69,14 @@ void setup() {
     yield();
   }
 
-  showWord(Words::drin);
+  showBitmap(Words::drin);
   Serial.println();
   Serial.println(F("WiFi connected"));
 
   // Print the IP address
   Serial.println(WiFi.localIP());
 
-  showWord(Words::zeit);
+  showBitmap(Words::zeit);
   timeClient.setUpdateInterval(intervalNTP);
   timeClient.begin();
 
@@ -184,21 +184,22 @@ void showTime(int hour, int minute) {
   overlay(buffer, *Numbers::digits[hour - 1]);
   Serial.println(hour);
 
-  matrix.clear();
-  matrix.drawBitmap(0, 0, buffer, 8, 8, LED_ON);
-  matrix.writeDisplay();
+  showBitmap(buffer);
 }
 
-void overlay(uint8_t *dest, const uint8_t *src) {
-  for (int i = 0; i < 8; i++) {
-    uint8_t b = dest[i];
-    b |=  pgm_read_byte(src + i);
-    dest[i] = b;
-  }
+void overlay(uint8_t dest[], const uint8_t *src) {
+  for (int i = 0; i < 8; i++) dest[i] |= pgm_read_byte(src + i);
 }
 
-void showWord(const uint8_t word[]) {
+void showBitmap(const uint8_t word[]) {
   matrix.clear();
   matrix.drawBitmap(0, 0, word, 8, 8, LED_ON);
   matrix.writeDisplay();
+}
+
+void showTwoWords(const uint8_t word1[], const uint8_t word2[]) {
+  uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+  overlay(buffer, word1);
+  overlay(buffer, word2);
+  showBitmap(buffer);
 }
