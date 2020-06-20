@@ -13,8 +13,6 @@
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PWD;
 
-const long utcOffsetInSeconds = 0;
-
 MLED matrix(2);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP); 
@@ -24,10 +22,12 @@ TimeChangeRule CET = { "CET", Last, Sun, Oct, 3, 60 };
 Timezone CE(CEST, CET);
 TimeChangeRule * tcr;
 
-unsigned long intervalNTP = 60 * 60 * 1000; // Request NTP time every hour
+const unsigned long intervalNTP = 60 * 60 * 1000; // Request NTP time every hour
+
 unsigned long prevNTP = 0;
 unsigned long lastNTPResponse = 0;
-unsigned long lastTime = 0;
+
+int lastDisplayTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -116,56 +116,77 @@ void loop() {
     }
   }
 
+  // Calculate localtime with timezone
+  Serial.print(F("Current UTC time:\t"));
+  Serial.println(timeClient.getFormattedTime());
   time_t localtime = CE.toLocal(timeClient.getEpochTime(), &tcr);
-  int seconds = second(localtime);
+  int hours = hourFormat12(localtime);
   int minutes = minute(localtime);
-  int hours = hour(localtime);
+  int seconds = second(localtime);
 
-  int now = hours * 60 + minutes;
-  if (lastTime != now) {
-    Serial.print(F("Current UTC time:\t"));
-    Serial.println(timeClient.getFormattedTime());
-
-    lastTime = now;
-    uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    
-    if (minutes % 10 >= 5) {
-      overlay(buffer, Partials::five);
-      Serial.print(F("fünf"));
-    }
-
-    if ((minutes >= 10 && minutes < 25) || (minutes >= 40 && minutes < 55)) {
-      overlay(buffer, Partials::ten);
-      Serial.print(F("zehn"));
-    }
-
-    if ((minutes >= 5 && minutes < 20) || (minutes >= 35 && minutes < 45)) {
-      overlay(buffer, Partials::past);
-      Serial.print(F(" nach "));
-    } else if ((minutes >= 20 && minutes < 30) || minutes >= 45) {
-      overlay(buffer, Partials::before);
-      Serial.print(F(" vor "));
-    }
-
-    if (minutes >= 20 && minutes < 45) {
-      overlay(buffer, Partials::half);
-      Serial.print(F("halb "));
-    }
-
-    if (minutes >= 20) hours++;
-
-    if (hours > 12) hours = hours % 12;
-    if (hours == 0) hours = 12;
-    overlay(buffer, *Numbers::digits[hours - 1]);
-    Serial.println(hours);
-
-    matrix.clear();
-    matrix.drawBitmap(0, 0, buffer, 8, 8, LED_ON);
-    matrix.writeDisplay();
+  // Display should change in the middle of 5-minute periods -> shift display time by 2.5 minutes (150 seconds)
+  int displaySecond = seconds + 150;
+  int displayHour = hours;
+  int displayMinute = minutes + (displaySecond / 60);
+  displaySecond %= 60;
+  if (displayMinute >= 60) {
+    displayMinute %= 60;
+    displayHour++;
+    if (displayHour > 12) displayHour = 1;
   }
 
-  // wait until the next possible display change (every 5 minutes)
-  delay(((300 - (((minutes * 60) + seconds) % 300)) * 1000) + 100);
+  // Display needs to update every 5 minutes only
+  int displayNow = displayHour * 60 + ((displayMinute / 5) * 5);
+  if (lastDisplayTime != displayNow) {
+    lastDisplayTime = displayNow;
+    showTime(displayHour, displayMinute);
+  }
+
+  // wait until the next possible display change (every 5 minute)
+  int secondsToNextUpdate = ((displayNow + 5) * 60) - ((((displayHour * 60) + displayMinute) * 60) + displaySecond);
+  if (secondsToNextUpdate > 0) {
+    Serial.print(F("Seconds to next display update: "));
+    Serial.println(secondsToNextUpdate);
+    delay(secondsToNextUpdate * 1000 + 100);
+  }
+}
+
+void showTime(int hour, int minute) {
+  uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
+  if (minute % 10 >= 5) {
+    overlay(buffer, Partials::five);
+    Serial.print(F("fünf"));
+  }
+
+  if ((minute >= 10 && minute < 25) || (minute >= 40 && minute < 55)) {
+    overlay(buffer, Partials::ten);
+    Serial.print(F("zehn"));
+  }
+
+  if ((minute >= 5 && minute < 20) || (minute >= 35 && minute < 45)) {
+    overlay(buffer, Partials::past);
+    Serial.print(F(" nach "));
+  } else if ((minute >= 20 && minute < 30) || minute >= 45) {
+    overlay(buffer, Partials::before);
+    Serial.print(F(" vor "));
+  }
+
+  if (minute >= 20 && minute < 45) {
+    overlay(buffer, Partials::half);
+    Serial.print(F("halb "));
+  }
+
+  if (minute >= 20) hour++;
+
+  if (hour > 12) hour = hour % 12;
+  if (hour == 0) hour = 12;
+  overlay(buffer, *Numbers::digits[hour - 1]);
+  Serial.println(hour);
+
+  matrix.clear();
+  matrix.drawBitmap(0, 0, buffer, 8, 8, LED_ON);
+  matrix.writeDisplay();
 }
 
 void overlay(uint8_t *dest, const uint8_t *src) {
