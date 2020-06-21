@@ -10,116 +10,65 @@
 #include "partials.h"
 #include "words.h"
 
+// WLAN credentials
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PWD;
 
-MLED matrix(2);
+// Request NTP interval in seconds
+const unsigned long intervalNTP = 60 * 60;
+
+MLED matrix(4);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP); 
 
 TimeChangeRule CEST = { "CEST", Last, Sun, Mar, 2, 120 };
 TimeChangeRule CET = { "CET", Last, Sun, Oct, 3, 60 };
 Timezone CE(CEST, CET);
-TimeChangeRule * tcr;
 
-const unsigned long intervalNTP = 60 * 60 * 1000; // Request NTP time every hour
-
-unsigned long prevNTP = 0;
-unsigned long lastNTPResponse = 0;
-
+// Last displayed time in minutes
 int lastDisplayTime = 0;
 
-void setup() {
-  Serial.begin(115200);
+// True until the first successful NTP request
+bool noTime = true;
 
+// Last successful NTP request in system millis
+unsigned long lastSync = 0;
+
+void setup() {
   showBitmap(Words::run);
 
+  Serial.begin(115200);
   while (!Serial) yield();
 
-  Serial.print(F("\n\nConnecting to "));
-  Serial.println(ssid);
   WiFi.mode(WIFI_STA);
 //  WiFi.setAutoConnect(true);
 //  WiFi.setAutoReconnect(true);
-  WiFi.begin(ssid, password);
 
-  showBitmap(Words::net);
-  Serial.println(F("Waitung for connection"));
-  
-  int ConnectTimeout = 30;
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(F("."));
-    Serial.print(WiFi.status());
-    if (--ConnectTimeout <= 0)
-    {
-      showTwoWords(Words::ach2, Words::net);
-      Serial.println();
-      Serial.println(F("WiFi connect timeout"));
-      
-      pinMode(BUILTIN_LED, OUTPUT);
-      for (;;) {
-        digitalWrite(BUILTIN_LED, LOW);
-        delay(2000);
-        digitalWrite(BUILTIN_LED, HIGH);
-        delay(2000);
-      }
-    }
-    yield();
-  }
-
-  showBitmap(Words::drin);
-  Serial.println();
-  Serial.println(F("WiFi connected"));
-
-  // Print the IP address
-  Serial.println(WiFi.localIP());
-
-  showBitmap(Words::zeit);
-  timeClient.setUpdateInterval(intervalNTP);
-  timeClient.begin();
-
-  Serial.println(F("Sending first NTP request ..."));
-  if (timeClient.update()) {
-    Serial.print(F("Got UTC time:\t"));
-    Serial.println(timeClient.getFormattedTime());
-  } else {
-    Serial.println(F("NTP request failed"));
-  }
-
-  matrix.intensity = 4;
+//  timeClient.setUpdateInterval(intervalNTP * 1000);
+  setSyncProvider(getNtpTime);  // does an NTP request too
+  setSyncInterval(intervalNTP);
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
+  timeStatus_t ntpStatus = timeStatus();
+  if (ntpStatus == timeNotSet) {
+    // No time after power on yet, try again after 10 seconds
+    showTwoBitmaps(Words::ach2, Words::net);
+    setSyncInterval(10);
+    delay(10000);
+    return;
+  }
 
-  if (currentMillis - prevNTP > intervalNTP) { // If a NTP interval has passed since last NTP request
-    prevNTP = currentMillis;
-    Serial.print(F("Current UTC time:\t"));
-    Serial.println(timeClient.getFormattedTime());
-    Serial.println(F("Sending NTP request ..."));
-    bool gotTime = timeClient.update();
-
-    if (gotTime) {                                  // If a new timestamp has been received
-      setTime(timeClient.getEpochTime());
-      Serial.print(F("Got new NTP UTC time:\t"));
-      Serial.println(timeClient.getFormattedTime());
-      lastNTPResponse = currentMillis;
-    } else if ((currentMillis - lastNTPResponse) > 3600000) {
-      Serial.println(F("More than 1 hour since last NTP response. Rebooting."));
-      Serial.flush();
-      ESP.reset();
-    } else if (intervalNTP > 600000) {
-      // on unsuccessful NTP try again after 10 min if NTP interval is above 10 min
-      prevNTP = currentMillis - intervalNTP + 600000;
-    }
+  if (ntpStatus == timeNeedsSync && (millis() - lastSync) > (24 * 60 * 60 * 1000)) {
+    // No NTP answer for 24 hours
+    showTwoBitmaps(Words::ach, Words::zeit);
+    delay(500);
   }
 
   // Calculate localtime with timezone
-  Serial.print(F("Current UTC time:\t"));
-  Serial.println(timeClient.getFormattedTime());
-  time_t localtime = CE.toLocal(timeClient.getEpochTime(), &tcr);
+  time_t localtime = CE.toLocal(now());
+  Serial.print(F("Current time:\t"));
+  Serial.println(formatTime(hour(localtime), minute(localtime)));
   int hours = hourFormat12(localtime);
   int minutes = minute(localtime);
   int seconds = second(localtime);
@@ -152,28 +101,28 @@ void loop() {
 }
 
 void showTime(int hour, int minute) {
-  uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+  matrix.clear();
 
   if (minute % 10 >= 5) {
-    overlay(buffer, Partials::five);
+    drawBitmap(Partials::five);
     Serial.print(F("fünf"));
   }
 
   if ((minute >= 10 && minute < 25) || (minute >= 40 && minute < 55)) {
-    overlay(buffer, Partials::ten);
+    drawBitmap(Partials::ten);
     Serial.print(F("zehn"));
   }
 
   if ((minute >= 5 && minute < 20) || (minute >= 35 && minute < 45)) {
-    overlay(buffer, Partials::past);
+    drawBitmap(Partials::past);
     Serial.print(F(" nach "));
   } else if ((minute >= 20 && minute < 30) || minute >= 45) {
-    overlay(buffer, Partials::before);
+    drawBitmap(Partials::before);
     Serial.print(F(" vor "));
   }
 
   if (minute >= 20 && minute < 45) {
-    overlay(buffer, Partials::half);
+    drawBitmap(Partials::half);
     Serial.print(F("halb "));
   }
 
@@ -181,25 +130,83 @@ void showTime(int hour, int minute) {
 
   if (hour > 12) hour = hour % 12;
   if (hour == 0) hour = 12;
-  overlay(buffer, *Numbers::digits[hour - 1]);
+  drawBitmap(*Numbers::digits[hour - 1]);
   Serial.println(hour);
 
-  showBitmap(buffer);
-}
-
-void overlay(uint8_t dest[], const uint8_t *src) {
-  for (int i = 0; i < 8; i++) dest[i] |= pgm_read_byte(src + i);
-}
-
-void showBitmap(const uint8_t word[]) {
-  matrix.clear();
-  matrix.drawBitmap(0, 0, word, 8, 8, LED_ON);
   matrix.writeDisplay();
 }
 
-void showTwoWords(const uint8_t word1[], const uint8_t word2[]) {
-  uint8_t buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-  overlay(buffer, word1);
-  overlay(buffer, word2);
-  showBitmap(buffer);
+void drawBitmap(const uint8_t word[]) {
+  matrix.drawBitmap(0, 0, word, 8, 8, LED_ON);
+}
+
+void showBitmap(const uint8_t bitmap[]) {
+  matrix.clear();
+  matrix.drawBitmap(0, 0, bitmap, 8, 8, LED_ON);
+  matrix.writeDisplay();
+}
+
+void showTwoBitmaps(const uint8_t bitmap1[], const uint8_t bitmap2[]) {
+  matrix.clear();
+  drawBitmap(bitmap1);
+  drawBitmap(bitmap2);
+  matrix.writeDisplay();
+}
+
+String formatTime(int hour, int minute) {
+  String hourString = (hour < 10) ? "0" + String(hour) : String(hour);
+  String minuteString = (minute < 10) ? "0" + String(minute) : String(minute);
+  return hourString + ":" + minuteString;
+}
+
+time_t getNtpTime() {
+  if (!WiFi.isConnected()) {
+//    if (noTime)
+      showBitmap(Words::net);
+    Serial.print(F("\n\nConnecting to "));
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+
+    Serial.print(F("Waiting for connection"));
+
+    int ConnectTimeout = 30;
+    while (!WiFi.isConnected())
+    {
+      delay(500);
+      Serial.print(F("."));
+      if (--ConnectTimeout <= 0)
+      {
+        Serial.println();
+        Serial.print(F("WiFi connect timeout: "));
+        Serial.println(WiFi.status());
+
+        return 0;
+      }
+    }
+  }
+
+  Serial.println();
+  Serial.println(F("WiFi connected"));
+
+  // Print the IP address
+  Serial.print(F("Local IP: "));
+  Serial.println(WiFi.localIP());
+
+//  if (noTime)
+    showTwoBitmaps(Words::net, Words::zeit);
+  timeClient.begin();
+  bool gotTime = timeClient.update();
+  timeClient.end();
+  if (gotTime) {
+    Serial.print(F("Got UTC time:\t"));
+    Serial.println(timeClient.getFormattedTime());
+    noTime = false;
+    lastSync = millis();
+    setSyncInterval(intervalNTP);
+    return timeClient.getEpochTime();
+  }
+
+  WiFi.disconnect(true);
+
+  return 0;
 }
