@@ -52,17 +52,25 @@ void setup() {
 void loop() {
   timeStatus_t ntpStatus = timeStatus();
   if (ntpStatus == timeNotSet) {
-    // No time after power on yet, try again after 10 seconds
+    // No time after power on yet
     showTwoBitmaps(Words::ach2, Words::net);
-    setSyncInterval(10);
-    delay(10000);
+
+    // try again after 30 seconds
+    setSyncInterval(30);
+    delay(30000);
     return;
+
+    // or do nothing and switch off
+//    ESP.deepSleep(0, WAKE_RF_DISABLED);
   }
 
   if (ntpStatus == timeNeedsSync && (millis() - lastSync) > (24 * 60 * 60 * 1000)) {
     // No NTP answer for 24 hours
     showTwoBitmaps(Words::ach, Words::zeit);
     delay(500);
+
+    // show time in any case to overwrite the error message
+    lastDisplayTime = 0;
   }
 
   // Calculate localtime with timezone
@@ -180,6 +188,8 @@ time_t getNtpTime() {
         Serial.print(F("WiFi connect timeout: "));
         Serial.println(WiFi.status());
 
+        WiFi.disconnect(true);
+
         return 0;
       }
     }
@@ -192,21 +202,22 @@ time_t getNtpTime() {
   Serial.print(F("Local IP: "));
   Serial.println(WiFi.localIP());
 
-//  if (noTime)
+  if (noTime)
     showTwoBitmaps(Words::net, Words::zeit);
   timeClient.begin();
   bool gotTime = timeClient.update();
   timeClient.end();
+  time_t time = 0;
   if (gotTime) {
     Serial.print(F("Got UTC time:\t"));
     Serial.println(timeClient.getFormattedTime());
     noTime = false;
     lastSync = millis();
     setSyncInterval(intervalNTP);
-    return timeClient.getEpochTime();
+    time = timeClient.getEpochTime();
   }
 
   WiFi.disconnect(true);
 
-  return 0;
+  return time;
 }
