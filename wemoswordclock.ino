@@ -68,9 +68,6 @@ void loop() {
     // No NTP answer for 24 hours
     showTwoBitmaps(Words::ach, Words::zeit);
     delay(500);
-
-    // show time in any case to overwrite the error message
-    lastDisplayTime = 0;
   }
 
   // Calculate localtime with timezone
@@ -152,6 +149,9 @@ void showBitmap(const uint8_t bitmap[]) {
   matrix.clear();
   matrix.drawBitmap(0, 0, bitmap, 8, 8, LED_ON);
   matrix.writeDisplay();
+
+  // after displaying text the time display needs to be restored
+  lastDisplayTime = 0;
 }
 
 void showTwoBitmaps(const uint8_t bitmap1[], const uint8_t bitmap2[]) {
@@ -159,6 +159,9 @@ void showTwoBitmaps(const uint8_t bitmap1[], const uint8_t bitmap2[]) {
   drawBitmap(bitmap1);
   drawBitmap(bitmap2);
   matrix.writeDisplay();
+
+  // after displaying text time display needs to be restored
+  lastDisplayTime = 0;
 }
 
 String formatTime(int hour, int minute) {

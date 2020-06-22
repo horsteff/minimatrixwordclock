@@ -1,0 +1,10 @@
+The clock uses following (german) layout:
+
+F Ü N F Z E H N
+V O R N A C H T
+H A L B I E L F
+Z E H N E U N Ü
+S I E D R E I N
+B E N Z W Ö L F
+E I N S E C H S
+A C H T V I E R
