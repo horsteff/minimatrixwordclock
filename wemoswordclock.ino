@@ -6,9 +6,7 @@
 #include <Timezone.h>
 
 #include "secrets.h"
-#include "numbers.h"
-#include "partials.h"
-#include "words.h"
+#include "bitmaps.h"
 
 // WLAN credentials
 const char* ssid     = WIFI_SSID;
@@ -35,7 +33,8 @@ bool noTime = true;
 unsigned long lastSync = 0;
 
 void setup() {
-  showBitmap(Words::run);
+  matrix.setRotation(3);
+  showBitmap(Bitmaps::run);
 
   Serial.begin(115200);
   while (!Serial) yield();
@@ -53,7 +52,7 @@ void loop() {
   timeStatus_t ntpStatus = timeStatus();
   if (ntpStatus == timeNotSet) {
     // No time after power on yet
-    showTwoBitmaps(Words::ach2, Words::net);
+    showTwoBitmaps(Bitmaps::ach, Bitmaps::net);
 
     // try again after 30 seconds
     setSyncInterval(30);
@@ -66,7 +65,7 @@ void loop() {
 
   if (ntpStatus == timeNeedsSync && (millis() - lastSync) > (24 * 60 * 60 * 1000)) {
     // No NTP answer for 24 hours
-    showTwoBitmaps(Words::ach, Words::zeit);
+    showTwoBitmaps(Bitmaps::ach, Bitmaps::_time);
     delay(500);
   }
 
@@ -109,25 +108,25 @@ void showTime(int hour, int minute) {
   matrix.clear();
 
   if (minute % 10 >= 5) {
-    drawBitmap(Partials::five);
+    drawBitmap(Bitmaps::pFive);
     Serial.print(F("fünf"));
   }
 
   if ((minute >= 10 && minute < 25) || (minute >= 40 && minute < 55)) {
-    drawBitmap(Partials::ten);
+    drawBitmap(Bitmaps::pTen);
     Serial.print(F("zehn"));
   }
 
   if ((minute >= 5 && minute < 20) || (minute >= 35 && minute < 45)) {
-    drawBitmap(Partials::past);
+    drawBitmap(Bitmaps::pPast);
     Serial.print(F(" nach "));
   } else if ((minute >= 20 && minute < 30) || minute >= 45) {
-    drawBitmap(Partials::before);
+    drawBitmap(Bitmaps::pBefore);
     Serial.print(F(" vor "));
   }
 
   if (minute >= 20 && minute < 45) {
-    drawBitmap(Partials::half);
+    drawBitmap(Bitmaps::pHalf);
     Serial.print(F("halb "));
   }
 
@@ -135,7 +134,7 @@ void showTime(int hour, int minute) {
 
   if (hour > 12) hour = hour % 12;
   if (hour == 0) hour = 12;
-  drawBitmap(*Numbers::digits[hour - 1]);
+  drawBitmap(*Bitmaps::numbers[hour]);
   Serial.println(hour);
 
   matrix.writeDisplay();
@@ -173,7 +172,7 @@ String formatTime(int hour, int minute) {
 time_t getNtpTime() {
   if (!WiFi.isConnected()) {
 //    if (noTime)
-      showBitmap(Words::net);
+      showBitmap(Bitmaps::net);
     Serial.print(F("\n\nConnecting to "));
     Serial.println(ssid);
     WiFi.begin(ssid, password);
@@ -206,7 +205,7 @@ time_t getNtpTime() {
   Serial.println(WiFi.localIP());
 
   if (noTime)
-    showTwoBitmaps(Words::net, Words::zeit);
+    showBitmap(Bitmaps::_time);
   timeClient.begin();
   bool gotTime = timeClient.update();
   timeClient.end();
