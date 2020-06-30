@@ -32,6 +32,9 @@ bool noTime = true;
 // Last successful NTP request in system millis
 unsigned long lastSync = 0;
 
+uint8_t buffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
+uint8_t oldBuffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
+
 void setup() {
   matrix.setRotation(3);
   showBitmap(Bitmaps::run);
@@ -105,7 +108,7 @@ void loop() {
 }
 
 void showTime(int hour, int minute) {
-  matrix.clear();
+  clear();
 
   if (minute % 10 >= 5) {
     drawBitmap(Bitmaps::pFive);
@@ -137,27 +140,61 @@ void showTime(int hour, int minute) {
   drawBitmap(*Bitmaps::numbers[hour]);
   Serial.println(hour);
 
+  verticalLineTransition();
+  writeDisplay();
+}
+
+void clear() {
+  for (uint8 i = 0; i < 8; i++) {
+    buffer[i] = 0;
+  }
+  matrix.clear();
+}
+
+void verticalLineTransition() {
+  for (int i = 0; i < 8; i++) {
+    uint8_t barMask = 0x80 >> i;
+    uint8_t bitmapMask = 0xFF >> i;
+    for (int j = 0; j < 8; j++) {
+      oldBuffer[j] |= barMask;
+      oldBuffer[j] &= bitmapMask;
+      oldBuffer[j] |= (buffer[j] & ~bitmapMask);
+    }
+    matrix.clear();
+    matrix.drawBitmap(0, 0, oldBuffer, 8, 8, LED_ON);
+    matrix.writeDisplay();
+    delay(35);
+    yield();
+  }
+}
+
+void writeDisplay() {
+  for (int i = 0; i < 8; i++) oldBuffer[i] = buffer[i];
+  matrix.clear();
+  matrix.drawBitmap(0, 0, buffer, 8, 8, LED_ON);
   matrix.writeDisplay();
 }
 
 void drawBitmap(const uint8_t word[]) {
-  matrix.drawBitmap(0, 0, word, 8, 8, LED_ON);
+  for (int i = 0; i < 8; i++) {
+    buffer[i] |= pgm_read_byte(&word[i]);
+  }
 }
 
 void showBitmap(const uint8_t bitmap[]) {
-  matrix.clear();
-  matrix.drawBitmap(0, 0, bitmap, 8, 8, LED_ON);
-  matrix.writeDisplay();
+  clear();
+  drawBitmap(bitmap);
+  writeDisplay();
 
   // after displaying text the time display needs to be restored
   lastDisplayTime = 0;
 }
 
 void showTwoBitmaps(const uint8_t bitmap1[], const uint8_t bitmap2[]) {
-  matrix.clear();
+  clear();
   drawBitmap(bitmap1);
   drawBitmap(bitmap2);
-  matrix.writeDisplay();
+  writeDisplay();
 
   // after displaying text time display needs to be restored
   lastDisplayTime = 0;
