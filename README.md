@@ -8,13 +8,13 @@
 
 ## Parts:
 
-WEMOS (LOLIN) D1 mini: https://docs.wemos.cc/en/latest/d1/d1_mini.html
-Matrix LED Shield: https://docs.wemos.cc/en/latest/d1_mini_shiled/matrix_led.html
+* WEMOS (LOLIN) D1 mini: https://docs.wemos.cc/en/latest/d1/d1_mini.html
+* Matrix LED Shield: https://docs.wemos.cc/en/latest/d1_mini_shiled/matrix_led.html
 
 ## Libraries:
 
-Wemos Matrix Adafruit GFX by Thomas O Fredericks: https://github.com/thomasfredericks/wemos_matrix_gfx
-Adafruit GFX Library by Adafruit: https://github.com/adafruit/Adafruit-GFX-Library
-NTPClient by Fabrice Weinberg: https://github.com/arduino-libraries/NTPClient
-Time by Michael Margolis/Paul Stoffregen: https://github.com/PaulStoffregen/Time
-Timezone by Jack Christensen: https://github.com/JChristensen/Timezone
+* Wemos Matrix Adafruit GFX by Thomas O Fredericks: https://github.com/thomasfredericks/wemos_matrix_gfx
+* Adafruit GFX Library by Adafruit: https://github.com/adafruit/Adafruit-GFX-Library
+* NTPClient by Fabrice Weinberg: https://github.com/arduino-libraries/NTPClient
+* Time by Michael Margolis/Paul Stoffregen: https://github.com/PaulStoffregen/Time
+* Timezone by Jack Christensen: https://github.com/JChristensen/Timezone
