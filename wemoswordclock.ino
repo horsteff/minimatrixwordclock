@@ -32,7 +32,10 @@ bool noTime = true;
 // Last successful NTP request in system millis
 unsigned long lastSync = 0;
 
+// New bitmap to display
 uint8_t buffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
+
+// Last displayed bitmap
 uint8_t oldBuffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
 
 void setup() {
@@ -140,8 +143,7 @@ void showTime(int hour, int minute) {
   drawBitmap(*Bitmaps::numbers[hour]);
   Serial.println(hour);
 
-  verticalLineTransition();
-  writeDisplay();
+  writeDisplayWithVerticalLineTransition();
 }
 
 void clear() {
@@ -151,21 +153,25 @@ void clear() {
   matrix.clear();
 }
 
-void verticalLineTransition() {
+// Displayes the old and the new bitmap with a separating vertical line moving from left to right.
+void writeDisplayWithVerticalLineTransition() {
   for (int i = 0; i < 8; i++) {
+    // bit set where the line should be displayed
     uint8_t barMask = 0x80 >> i;
-    uint8_t bitmapMask = 0xFF >> i;
+    // unset bits where the new and set bits where the old bitmap should be displayed
+    uint8_t oldNewMask = 0xFF >> i;
+
     for (int j = 0; j < 8; j++) {
-      oldBuffer[j] |= barMask;
-      oldBuffer[j] &= bitmapMask;
-      oldBuffer[j] |= (buffer[j] & ~bitmapMask);
+      oldBuffer[j] &= oldNewMask;
+      oldBuffer[j] |= barMask | (buffer[j] & ~oldNewMask);
     }
+
     matrix.clear();
     matrix.drawBitmap(0, 0, oldBuffer, 8, 8, LED_ON);
     matrix.writeDisplay();
     delay(35);
-    yield();
   }
+  writeDisplay();
 }
 
 void writeDisplay() {
