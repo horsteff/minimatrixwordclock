@@ -52,6 +52,7 @@ struct Bitmaps {
   static const uint8_t rain[];
   static const uint8_t wind[];
   static const uint8_t cloudy[];
+  static const uint8_t lightning[];
   static const uint8_t low[];
   static const uint8_t much[];
 

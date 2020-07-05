@@ -372,6 +372,17 @@ const uint8_t Bitmaps::cloudy[] =
     0x00,
     0x00
 };
+const uint8_t Bitmaps::lightning[] =
+{
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    B00000100,
+    B00000010,
+    B00001000,
+    B11000000
+};
 const uint8_t Bitmaps::low[] =
 {
     0x00,
