@@ -38,6 +38,10 @@ uint8_t buffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
 // Last displayed bitmap
 uint8_t oldBuffer[8] = {0, 0, 0, 0, 0, 0, 0 ,0};
 
+// Additional connection data for a fast WiFi reconnect
+uint8_t channel = 255;
+uint8_t bssid[6] = { 0, 0, 0, 0, 0, 0 };
+
 void setup() {
   matrix.setRotation(3);
   showBitmap(Bitmaps::run);
@@ -45,9 +49,13 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) yield();
 
-  WiFi.mode(WIFI_STA);
-//  WiFi.setAutoConnect(true);
-//  WiFi.setAutoReconnect(true);
+  // Disable WiFi
+  WiFi.persistent(false);  // Do not store credentials in flash (prevent ageing)
+  WiFi.setAutoConnect(false);
+  WiFi.setAutoReconnect(false);
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  yield();
 
 //  timeClient.setUpdateInterval(intervalNTP * 1000);
   setSyncProvider(getNtpTime);  // does an NTP request too
@@ -65,7 +73,7 @@ void loop() {
     delay(30000);
     return;
 
-    // or do nothing and switch off
+    // or do nothing and switch off (doesn't work yet, needs code changes!)
 //    ESP.deepSleep(0, WAKE_RF_DISABLED);
   }
 
@@ -218,25 +226,44 @@ time_t getNtpTime() {
       showBitmap(Bitmaps::net);
     Serial.print(F("\n\nConnecting to "));
     Serial.println(ssid);
-    WiFi.begin(ssid, password);
+    WiFi.forceSleepWake();
+    yield();
+    WiFi.mode(WIFI_STA);
+    if (channel < 255) {
+      // fast connect
+      WiFi.begin(ssid, password, channel, bssid, true);
+    } else {
+      WiFi.begin(ssid, password);
+    }
 
     Serial.print(F("Waiting for connection"));
 
-    int ConnectTimeout = 30;
+    int connectTimeout = 300;
     while (!WiFi.isConnected())
     {
-      delay(500);
+      if (channel < 255 && connectTimeout == 200) {
+        // If fast connect failed, reset WIFI and do a normal connect
+        WiFi.disconnect();
+        delay(10);
+        WiFi.forceSleepBegin();
+        yield();
+        WiFi.forceSleepWake();
+        yield();
+        WiFi.begin(ssid, password);
+      }
+
       Serial.print(F("."));
-      if (--ConnectTimeout <= 0)
+      if (--connectTimeout <= 0)
       {
         Serial.println();
         Serial.print(F("WiFi connect timeout: "));
         Serial.println(WiFi.status());
 
-        WiFi.disconnect(true);
+        disconnectAndDisableWiFi();
 
         return 0;
       }
+      delay(50);
     }
   }
 
@@ -247,7 +274,11 @@ time_t getNtpTime() {
   Serial.print(F("Local IP: "));
   Serial.println(WiFi.localIP());
 
-  if (noTime)
+  // Save channel and bssid for a fast connect next time
+  channel = WiFi.channel();
+  memcpy(bssid, WiFi.BSSID(), 6);
+
+//  if (noTime)
     showBitmap(Bitmaps::_time);
   timeClient.begin();
   bool gotTime = timeClient.update();
@@ -262,7 +293,14 @@ time_t getNtpTime() {
     time = timeClient.getEpochTime();
   }
 
-  WiFi.disconnect(true);
+  disconnectAndDisableWiFi();
 
   return time;
+}
+
+void disconnectAndDisableWiFi() {
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  yield();
 }
